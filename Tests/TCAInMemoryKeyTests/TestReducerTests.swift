@@ -11,7 +11,8 @@ import XCTest
 
 @MainActor
 final class TestReducerTests: XCTestCase {
-    // Test should have passed.
+
+    // This is fixed with https://github.com/pointfreeco/swift-sharing/pull/90
     func testReducerOptionalInt() async {
         let store = TestStore(
             initialState: TestReducerOptionalInt.State(value: Shared(wrappedValue: 999, .inMemory("\(#function)"))),
@@ -37,6 +38,29 @@ final class TestReducerTests: XCTestCase {
     func testReducerInt() async {
         let store = TestStore(
             initialState: TestReducerInt.State(value: Shared(wrappedValue: 999, .inMemory("\(#function)"))),
+            reducer: TestReducerInt.init,
+            withDependencies: { _ in }
+        )
+
+        store.assert { state in
+            state.$value.withLock { $0 = 999 }
+        }
+
+        await store.send(.set) {
+            $0.$value.withLock { $0 = 998 }
+        }
+
+        try? await Task.sleep(for: .milliseconds(300))
+
+        store.assert { state in
+            state.$value.withLock { $0 = 997 }
+        }
+    }
+
+    // This should have passed
+    func testReducerIntFromOptionalSharedInt() async {
+        let store = TestStore(
+            initialState: TestReducerInt.State(value: Shared(Shared(wrappedValue: 999, .inMemory("\(#function)")))!),
             reducer: TestReducerInt.init,
             withDependencies: { _ in }
         )
